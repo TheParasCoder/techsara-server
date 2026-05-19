@@ -1,255 +1,300 @@
 const socket = io();
-const video = document.getElementById('remote-video');
-const clientList = document.getElementById('client-list');
-const clientCount = document.getElementById('client-count');
-const disconnectBtn = document.getElementById('disconnect-btn');
-const adminPassword = document.getElementById('admin-password');
-const loginBtn = document.getElementById('login-btn');
-const loginContainer = document.getElementById('login-container');
-const dashboardControls = document.getElementById('dashboard-controls');
-const connectionStatus = document.getElementById('connection-status');
-const videoControls = document.getElementById('video-controls');
-const placeholder = document.getElementById('placeholder');
-const forceResetBtn = document.getElementById('force-reset-btn');
-const debugLogs = document.getElementById('debug-logs');
+const video   = document.getElementById('remote-video');
 
-function log(msg) {
-    const div = document.createElement('div');
-    div.textContent = `> ${new Date().toLocaleTimeString()}: ${msg}`;
-    debugLogs.appendChild(div);
-    debugLogs.scrollTop = debugLogs.scrollHeight;
-}
-
-forceResetBtn.addEventListener('click', () => {
-    if (confirm('This will disconnect ALL clients and ALL support agents. Are you sure?')) {
-        socket.emit('force_reset_all');
-    }
-});
-
-socket.on('server_reset', () => {
-    alert('Server was reset by an admin. Page will reload.');
-    window.location.reload();
-});
-
-let peerConnection;
-let dataChannel;
+let peerConnection = null;
+let dataChannel    = null;
 let targetClientId = null;
+let agentName      = '';
+let logOpen        = false;
 
-const configuration = {
-    iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { 
-            urls: 'turn:openrelay.metered.ca:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        }
-    ]
+const iceConfig = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'turn:openrelay.metered.ca:80',  username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+  ]
 };
 
-socket.on('connect', () => {
-    connectionStatus.style.display = 'block';
-    log('Connected to signaling server');
+function log(msg) {
+  const el = document.getElementById('debug-logs');
+  if (!el) return;
+  const div = document.createElement('div');
+  div.textContent = `> ${new Date().toLocaleTimeString()}: ${msg}`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Log toggle ──────────────────────────
+document.getElementById('log-toggle').addEventListener('click', () => {
+  logOpen = !logOpen;
+  document.getElementById('log-body').style.display = logOpen ? 'block' : 'none';
+  document.getElementById('log-chevron').textContent = logOpen ? '▴' : '▾';
 });
 
-loginBtn.addEventListener('click', () => {
-    const pwd = adminPassword.value;
-    const name = document.getElementById('admin-name').value;
-    if (!pwd || !name) return alert('Please enter name and password');
-    socket.emit('register', { type: 'support', password: pwd, name: name });
+// ── Server connection status ─────────────
+const serverIndicator = document.getElementById('server-indicator');
+
+socket.on('connect', () => {
+  serverIndicator.classList.remove('offline');
+  log('Connected to server');
 });
+
+socket.on('disconnect', () => {
+  serverIndicator.classList.add('offline');
+  log('Disconnected from server');
+});
+
+// ── Login ───────────────────────────────
+document.getElementById('login-btn').addEventListener('click', doLogin);
+document.getElementById('admin-password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+function doLogin() {
+  const name = document.getElementById('admin-name').value.trim();
+  const pwd  = document.getElementById('admin-password').value;
+  const err  = document.getElementById('login-error');
+  if (!name || !pwd) {
+    err.textContent = 'Please enter your name and password.';
+    err.style.display = 'block';
+    return;
+  }
+  agentName = name;
+  socket.emit('register', { type: 'support', password: pwd, name });
+}
 
 socket.on('login_success', () => {
-    log('Login successful');
-    loginContainer.style.display = 'none';
-    dashboardControls.style.display = 'block';
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'flex';
+  document.getElementById('agent-row').textContent = `Signed in as ${agentName}`;
+
+  // Set up the download link
+  const base = window.location.origin;
+  document.getElementById('copy-url').textContent = base + '/download.html';
+  document.getElementById('btn-copy').addEventListener('click', () => {
+    navigator.clipboard.writeText(base + '/download.html').then(() => {
+      const btn = document.getElementById('btn-copy');
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+
+  log('Login successful — welcome, ' + agentName);
 });
 
 socket.on('login_error', (msg) => {
-    log('Login failed: ' + msg);
-    alert('Login Failed: ' + msg);
+  const err = document.getElementById('login-error');
+  err.textContent = 'Login failed: ' + msg;
+  err.style.display = 'block';
 });
 
-socket.on('session_blocked', (msg) => {
-    log('Session blocked: ' + msg);
-    alert('Cannot connect: ' + msg);
-});
-
+// ── Client list ──────────────────────────
 socket.on('clients_list', (clients) => {
-    clientCount.textContent = clients.length;
-    clientList.innerHTML = '';
-    
-    if (clients.length === 0) {
-        clientList.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; margin-top: 2rem;">No clients online</p>';
-        return;
+  const countEl = document.getElementById('client-count');
+  const listEl  = document.getElementById('client-list');
+
+  countEl.textContent = clients.length;
+
+  if (clients.length === 0) {
+    listEl.innerHTML = '<div class="empty-state">No clients available.<br>Clients must click <strong>"Allow Support Access"</strong> in their app.</div>';
+    return;
+  }
+
+  listEl.innerHTML = '';
+  clients.forEach(client => {
+    const isMySession = client.isBusy && client.agentName === agentName;
+    const isActive    = targetClientId === client.id;
+
+    const div = document.createElement('div');
+    div.className = `client-item${isActive ? ' active' : ''}${client.isBusy && !isMySession ? ' busy' : ''}`;
+
+    let statusText = 'Available — click to connect';
+    if (isMySession) statusText = 'In session with you';
+    else if (client.isBusy) statusText = `In session with ${client.agentName}`;
+
+    div.innerHTML = `
+      <div class="client-item-name">${client.id}</div>
+      <div class="client-item-status">${statusText}</div>
+    `;
+
+    if (!client.isBusy || isMySession) {
+      div.addEventListener('click', () => {
+        if (targetClientId === client.id) return;
+        connectToClient(client.id);
+      });
     }
 
-    clients.forEach(client => {
-        const currentAgentName = document.getElementById('admin-name').value;
-        const isMe = client.isBusy && client.agentName === currentAgentName;
-
-        const div = document.createElement('div');
-        div.className = `client-item ${targetClientId === client.id ? 'active' : ''} ${client.isBusy ? 'busy' : ''}`;
-        
-        let statusHtml = '<div style="font-size: 0.75rem; color: var(--success);">Available</div>';
-        if (client.isBusy) {
-            statusHtml = `<div style="font-size: 0.75rem; color: var(--danger);">Busy (with ${client.agentName}) ${isMe ? '<strong>[YOU]</strong>' : ''}</div>`;
-        }
-
-        div.innerHTML = `
-            <div style="font-weight: 600; font-size: 0.9rem;">${client.id}</div>
-            ${statusHtml}
-        `;
-        
-        if (!client.isBusy || isMe || targetClientId === client.id) {
-            div.addEventListener('click', () => {
-                if (targetClientId === client.id) return;
-                connectToClient(client.id);
-            });
-        } else {
-            div.style.opacity = '0.6';
-            div.style.cursor = 'not-allowed';
-        }
-        clientList.appendChild(div);
-    });
+    listEl.appendChild(div);
+  });
 });
 
+// ── Session blocked ──────────────────────
+socket.on('session_blocked', (msg) => {
+  log('Blocked: ' + msg);
+  alert('Cannot connect: ' + msg);
+});
+
+// ── Connect to client ────────────────────
 function connectToClient(clientId) {
-    if (peerConnection) closeConnection();
-    
-    targetClientId = clientId;
-    log('Starting session with ' + clientId);
-    
-    // UI Update
-    document.querySelectorAll('.client-item').forEach(el => {
-        el.classList.remove('active');
-        if (el.innerText.includes(clientId)) el.classList.add('active');
-    });
-
-    placeholder.style.display = 'none';
-    videoControls.style.display = 'flex';
-
-    socket.emit('request_connection', clientId);
+  if (peerConnection) closeConnection();
+  targetClientId = clientId;
+  document.getElementById('session-client-name').textContent = clientId;
+  log('Requesting connection to ' + clientId);
+  socket.emit('request_connection', clientId);
 }
 
-disconnectBtn.addEventListener('click', () => {
-    closeConnection();
-});
+// ── Disconnect button ────────────────────
+document.getElementById('disconnect-btn').addEventListener('click', closeConnection);
 
 function closeConnection() {
-    log('Closing connection...');
-    if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-    }
-    if (dataChannel) {
-        dataChannel.close();
-        dataChannel = null;
-    }
-    if (targetClientId) {
-        socket.emit('end_session', targetClientId);
-    }
-    
-    video.srcObject = null;
+  log('Ending session...');
+  if (peerConnection) { peerConnection.close(); peerConnection = null; }
+  if (dataChannel)    { dataChannel.close();    dataChannel = null;    }
+  if (targetClientId) {
+    socket.emit('end_session', targetClientId);
     targetClientId = null;
-    placeholder.style.display = 'flex';
-    videoControls.style.display = 'none';
-    
-    document.querySelectorAll('.client-item').forEach(el => el.classList.remove('active'));
-    log('Session ended.');
+  }
+  video.srcObject = null;
+  showPlaceholder();
+  log('Session ended.');
 }
 
+// ── Session ended by server (client disconnected) ──
+socket.on('session_ended', () => {
+  log('Session ended (remote side)');
+  if (peerConnection) { peerConnection.close(); peerConnection = null; }
+  if (dataChannel)    { dataChannel.close();    dataChannel = null;    }
+  targetClientId = null;
+  video.srcObject = null;
+  showPlaceholder();
+});
+
+// ── Fullscreen ───────────────────────────
+document.getElementById('fullscreen-btn').addEventListener('click', () => {
+  const wrapper = document.getElementById('video-wrapper');
+  if (!document.fullscreenElement) {
+    wrapper.requestFullscreen().catch(() => video.requestFullscreen());
+  } else {
+    document.exitFullscreen();
+  }
+});
+
+// ── WebRTC — receive offer from client ───
 socket.on('offer', async (data) => {
-    log('Received WebRTC offer from client');
-    
-    peerConnection = new RTCPeerConnection(configuration);
-    
-    peerConnection.ontrack = (event) => {
-        log('Remote track received!');
-        if (video.srcObject !== event.streams[0]) {
-            video.srcObject = event.streams[0];
-            log('Video stream attached to element');
-        }
-    };
+  log('WebRTC offer received from client');
+  peerConnection = new RTCPeerConnection(iceConfig);
 
-    peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-            socket.emit('ice-candidate', { target: data.sender, candidate: event.candidate });
-        }
-    };
+  peerConnection.ontrack = (event) => {
+    log('Video stream received');
+    if (video.srcObject !== event.streams[0]) {
+      video.srcObject = event.streams[0];
+      showVideo();
+    }
+  };
 
-    peerConnection.oniceconnectionstatechange = () => {
-        log('ICE State: ' + peerConnection.iceConnectionState);
-    };
+  peerConnection.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit('ice-candidate', { target: data.sender, candidate: event.candidate });
+    }
+  };
 
-    peerConnection.ondatachannel = (event) => {
-        dataChannel = event.channel;
-        dataChannel.onopen = () => log('Data channel (Input) opened');
-    };
+  peerConnection.oniceconnectionstatechange = () => {
+    log('ICE state: ' + peerConnection.iceConnectionState);
+  };
 
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
+  peerConnection.ondatachannel = (event) => {
+    dataChannel = event.channel;
+    dataChannel.onopen = () => log('Input channel open — remote control active');
+  };
 
-    socket.emit('answer', { target: data.sender, sdp: answer });
-    log('Sent WebRTC answer to client');
+  await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+  const answer = await peerConnection.createAnswer();
+  await peerConnection.setLocalDescription(answer);
+  socket.emit('answer', { target: data.sender, sdp: answer });
+  log('WebRTC answer sent');
+});
+
+socket.on('answer', async (data) => {
+  if (peerConnection) {
+    try { await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp)); }
+    catch (e) { log('Answer error: ' + e.message); }
+  }
 });
 
 socket.on('ice-candidate', async (data) => {
-    if (peerConnection) {
-        try {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } catch (e) {
-            console.error('Error adding ICE candidate', e);
-        }
-    }
+  if (peerConnection) {
+    try { await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate)); }
+    catch (e) {}
+  }
 });
 
-// Input capturing with throttling for smoothness
-function throttle(func, limit) {
-    let inThrottle;
-    return function() {
-        const args = arguments;
-        const context = this;
-        if (!inThrottle) {
-            func.apply(context, args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
-        }
-    }
+// ── Force reset ──────────────────────────
+document.getElementById('force-reset-btn').addEventListener('click', () => {
+  if (confirm('Disconnect ALL active sessions? Clients will need to re-enable access.')) {
+    socket.emit('force_reset_all');
+  }
+});
+
+socket.on('server_reset', () => {
+  alert('Server was reset. Page will reload.');
+  window.location.reload();
+});
+
+// ── UI helpers ───────────────────────────
+function showVideo() {
+  document.getElementById('placeholder').style.display = 'none';
+  document.getElementById('video-topbar').style.display = 'flex';
 }
 
-const handleMouseMove = throttle((e) => {
-    if (!dataChannel || dataChannel.readyState !== 'open') return;
-    const rect = video.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    dataChannel.send(JSON.stringify({ type: 'mousemove', x, y }));
+function showPlaceholder() {
+  document.getElementById('placeholder').style.display = 'flex';
+  document.getElementById('video-topbar').style.display = 'none';
+}
+
+// ── Remote input ─────────────────────────
+const throttle = (fn, ms) => {
+  let t;
+  return (...args) => {
+    if (t) return;
+    fn(...args);
+    t = setTimeout(() => (t = null), ms);
+  };
+};
+
+const sendMouseMove = throttle((e) => {
+  if (!dataChannel || dataChannel.readyState !== 'open') return;
+  const r = video.getBoundingClientRect();
+  dataChannel.send(JSON.stringify({
+    type: 'mousemove',
+    x: (e.clientX - r.left) / r.width,
+    y: (e.clientY - r.top)  / r.height
+  }));
 }, 30);
 
-video.addEventListener('mousemove', handleMouseMove);
+video.addEventListener('mousemove', sendMouseMove);
 
 video.addEventListener('mousedown', (e) => {
-    if (!dataChannel || dataChannel.readyState !== 'open') return;
-    const button = e.button === 0 ? 'left' : (e.button === 2 ? 'right' : 'middle');
-    dataChannel.send(JSON.stringify({ type: 'mousedown', button }));
+  if (!dataChannel || dataChannel.readyState !== 'open') return;
+  const btn = e.button === 0 ? 'left' : e.button === 2 ? 'right' : 'middle';
+  dataChannel.send(JSON.stringify({ type: 'mousedown', button: btn }));
 });
 
 video.addEventListener('mouseup', (e) => {
-    if (!dataChannel || dataChannel.readyState !== 'open') return;
-    const button = e.button === 0 ? 'left' : (e.button === 2 ? 'right' : 'middle');
-    dataChannel.send(JSON.stringify({ type: 'mouseup', button }));
+  if (!dataChannel || dataChannel.readyState !== 'open') return;
+  const btn = e.button === 0 ? 'left' : e.button === 2 ? 'right' : 'middle';
+  dataChannel.send(JSON.stringify({ type: 'mouseup', button: btn }));
 });
 
 video.addEventListener('contextmenu', e => e.preventDefault());
 
 window.addEventListener('keydown', (e) => {
-    if (!dataChannel || dataChannel.readyState !== 'open') return;
-    dataChannel.send(JSON.stringify({ type: 'keydown', key: e.key, code: e.code }));
+  if (!dataChannel || dataChannel.readyState !== 'open') return;
+  dataChannel.send(JSON.stringify({ type: 'keydown', key: e.key, code: e.code }));
 });
 
 window.addEventListener('keyup', (e) => {
-    if (!dataChannel || dataChannel.readyState !== 'open') return;
-    dataChannel.send(JSON.stringify({ type: 'keyup', key: e.key, code: e.code }));
+  if (!dataChannel || dataChannel.readyState !== 'open') return;
+  dataChannel.send(JSON.stringify({ type: 'keyup', key: e.key, code: e.code }));
 });

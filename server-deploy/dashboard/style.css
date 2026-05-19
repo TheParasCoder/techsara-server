@@ -24,7 +24,7 @@ body {
   overflow: hidden;
 }
 
-/* ── LOGIN ─────────────────────────── */
+/* â”€â”€ LOGIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #login-screen {
   display: flex;
   align-items: center;
@@ -110,10 +110,10 @@ input:focus { border-color: var(--accent); }
   margin-top: 1rem;
 }
 
-/* ── LAYOUT ─────────────────────────── */
+/* â”€â”€ LAYOUT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #dashboard { display: flex; height: 100vh; overflow: hidden; }
 
-/* ── SIDEBAR ─────────────────────────── */
+/* â”€â”€ SIDEBAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 aside.sidebar {
   width: var(--sidebar-w);
   flex-shrink: 0;
@@ -229,7 +229,7 @@ aside.sidebar {
 
 .sidebar-divider { height: 1px; background: var(--border); }
 
-/* ── DOWNLOAD BOX ─────────────────────── */
+/* â”€â”€ DOWNLOAD BOX â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .download-box { padding: 0.5rem 1.1rem 0.8rem; }
 
 .download-box p {
@@ -293,7 +293,7 @@ aside.sidebar {
 
 .btn-open-download:hover { background: rgba(59,130,246,0.18); }
 
-/* ── SIDEBAR FOOTER ───────────────────── */
+/* â”€â”€ SIDEBAR FOOTER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .sidebar-footer {
   padding: 0.7rem 1.1rem;
   border-top: 1px solid var(--border);
@@ -315,7 +315,7 @@ aside.sidebar {
 
 .btn-reset:hover { background: rgba(239,68,68,0.1); color: var(--danger); border-color: var(--danger); }
 
-/* ── MAIN CONTENT ─────────────────────── */
+/* â”€â”€ MAIN CONTENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .main-content {
   flex: 1;
   display: flex;
@@ -354,7 +354,7 @@ video { width: 100%; height: 100%; object-fit: contain; display: block; }
 .video-placeholder p { font-size: 0.88rem; }
 .placeholder-sub { font-size: 0.74rem !important; opacity: 0.6; }
 
-/* ── VIDEO TOP BAR ────────────────────── */
+/* â”€â”€ VIDEO TOP BAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .video-topbar {
   position: absolute;
   top: 0; left: 0; right: 0;
@@ -406,10 +406,13 @@ video { width: 100%; height: 100%; object-fit: contain; display: block; }
 
 .vid-btn:hover { background: rgba(255,255,255,0.24); }
 
+.vid-btn-reconnect { background: rgba(245,158,11,0.82); border-color: rgba(245,158,11,0.5); }
+.vid-btn-reconnect:hover { background: #f59e0b; }
+
 .vid-btn-end { background: rgba(239,68,68,0.82); border-color: rgba(239,68,68,0.5); }
 .vid-btn-end:hover { background: var(--danger); }
 
-/* ── LOG PANEL ────────────────────────── */
+/* â”€â”€ LOG PANEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .log-panel {
   background: var(--surface);
   border: 1px solid var(--border);

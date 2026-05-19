@@ -14,6 +14,8 @@ const supports = new Map();
 const activeSessions = new Map();
 // agentName -> { clientId }  â€” preserved sessions (agent offline, session kept until explicit disconnect)
 const reconnectTimers = new Map();
+// clientId -> { agentSocketId }  â€” preserved sessions when CLIENT goes offline
+const clientReconnectTimers = new Map();
 
 app.use(express.static(path.join(__dirname, 'dashboard')));
 
@@ -75,10 +77,12 @@ function endSession(clientId, reason) {
 }
 
 function broadcastClients() {
+  // Send ALL known clients â€” dashboard shows unavailable ones with "ask to enable" message
   const clientList = Array.from(clients.entries())
-    .filter(([, c]) => c.available)
-    .map(([id]) => ({
+    .map(([id, c]) => ({
       id,
+      available: c.available,
+      online: !!c.socketId,
       isBusy: activeSessions.has(id),
       agentName: getSessionAgentName(id)
     }));
@@ -96,6 +100,22 @@ io.on('connection', (socket) => {
       clients.set(data.clientId, { socketId: socket.id, available: false });
       socket.clientId = data.clientId;
       console.log(`Client registered: ${data.clientId}`);
+
+      // Restore session if client had an active session before going offline
+      if (clientReconnectTimers.has(data.clientId)) {
+        const preserved = clientReconnectTimers.get(data.clientId);
+        clientReconnectTimers.delete(data.clientId);
+        const agentSocketId = preserved.agentSocketId;
+        if (agentSocketId && supports.has(agentSocketId)) {
+          const sup = supports.get(agentSocketId);
+          activeSessions.set(data.clientId, agentSocketId);
+          // Tell client to start new WebRTC with agent
+          io.to(socket.id).emit('support_request', { supportId: agentSocketId, agentName: sup.name });
+          // Tell agent the client is back
+          io.to(agentSocketId).emit('client_reconnected', { clientId: data.clientId });
+          console.log(`Client ${data.clientId} reconnected â€” session with ${sup.name} restored`);
+        }
+      }
 
     } else if (data.type === 'support') {
       if (data.password !== 'admin123') {
@@ -202,6 +222,7 @@ io.on('connection', (socket) => {
   socket.on('force_reset_all', () => {
     console.log('Force reset by', socket.id);
     reconnectTimers.clear();
+    clientReconnectTimers.clear();
     activeSessions.clear();
     clients.forEach(c => { c.available = false; });
     io.emit('server_reset');
@@ -213,10 +234,18 @@ io.on('connection', (socket) => {
 
     // â”€â”€ Client disconnected â”€â”€
     if (socket.clientId) {
-      if (activeSessions.has(socket.clientId)) {
-        endSession(socket.clientId, 'client_offline');
+      const agentSocketId = activeSessions.get(socket.clientId);
+      if (agentSocketId && supports.has(agentSocketId)) {
+        // Preserve session â€” store it so it's restored when client reconnects
+        clientReconnectTimers.set(socket.clientId, { agentSocketId });
+        io.to(agentSocketId).emit('client_reconnecting', { clientId: socket.clientId });
+        console.log(`Client ${socket.clientId} went offline â€” session with agent preserved`);
+      } else if (activeSessions.has(socket.clientId)) {
+        activeSessions.delete(socket.clientId);
       }
-      clients.delete(socket.clientId);
+      // Keep client in map but mark as offline (socketId = null) so dashboard still shows it
+      const clientData = clients.get(socket.clientId);
+      if (clientData) { clientData.socketId = null; clientData.available = false; }
       broadcastClients();
     }
 

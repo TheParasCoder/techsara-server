@@ -17,7 +17,8 @@ const iceConfig = {
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'turn:openrelay.metered.ca:80',  username: 'openrelayproject', credential: 'openrelayproject' },
     { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
-  ]
+  ],
+  iceCandidatePoolSize: 10
 };
 
 function log(msg) {
@@ -238,10 +239,12 @@ document.getElementById('fullscreen-btn').addEventListener('click', () => {
 // ── WebRTC — receive offer from client ───
 socket.on('offer', async (data) => {
   log('WebRTC offer received from client');
+  const connStart = Date.now();
   peerConnection = new RTCPeerConnection(iceConfig);
 
   peerConnection.ontrack = (event) => {
-    log('Video stream received');
+    const elapsed = Date.now() - connStart;
+    log(`Video stream received (${elapsed}ms)`);
     if (video.srcObject !== event.streams[0]) {
       video.srcObject = event.streams[0];
       showVideo();
@@ -256,6 +259,10 @@ socket.on('offer', async (data) => {
 
   peerConnection.oniceconnectionstatechange = () => {
     log('ICE state: ' + peerConnection.iceConnectionState);
+  };
+
+  peerConnection.onconnectionstatechange = () => {
+    log('Connection state: ' + peerConnection.connectionState);
   };
 
   peerConnection.ondatachannel = (event) => {

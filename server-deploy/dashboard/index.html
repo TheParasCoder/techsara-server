@@ -94,6 +94,10 @@
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
               Fullscreen
             </button>
+            <button class="vid-btn vid-btn-reconnect" id="reconnect-btn" title="Reconnect video if screen is black">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Reconnect
+            </button>
             <button class="vid-btn vid-btn-end" id="disconnect-btn">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               End Session
@@ -106,7 +110,7 @@
       <!-- Collapsible log -->
       <div class="log-panel">
         <button class="log-toggle" id="log-toggle">
-          Session Log <span id="log-chevron">▾</span>
+          Session Log <span id="log-chevron">â–¾</span>
         </button>
         <div class="log-body" id="log-body" style="display:none;">
           <div id="debug-logs">> System ready.</div>

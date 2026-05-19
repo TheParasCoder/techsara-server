@@ -387,26 +387,48 @@ function showToast(msg, isError) {
 }
 
 // ── Remote input ─────────────────────────
-const throttle = (fn, ms) => {
-  let t;
-  return (...args) => {
-    if (t) return;
-    fn(...args);
-    t = setTimeout(() => (t = null), ms);
-  };
-};
-
 function dc() { return dataChannel && dataChannel.readyState === 'open'; }
 
-const sendMouseMove = throttle((e) => {
-  if (!mouseEnabled || !dc()) return;
+// The real video content rect inside the <video> element. Because of
+// object-fit: contain there are black bars (letterbox/pillarbox) — clicks
+// must be mapped against the actual picture, not the element box.
+function videoContentRect() {
   const r = video.getBoundingClientRect();
-  dataChannel.send(JSON.stringify({
-    type: 'mousemove',
-    x: (e.clientX - r.left) / r.width,
-    y: (e.clientY - r.top)  / r.height
-  }));
-}, 30);
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return { left: r.left, top: r.top, width: r.width, height: r.height };
+  const elemAspect = r.width / r.height;
+  const vidAspect  = vw / vh;
+  if (vidAspect > elemAspect) {
+    const h = r.width / vidAspect;            // black bars top & bottom
+    return { left: r.left, top: r.top + (r.height - h) / 2, width: r.width, height: h };
+  }
+  const w = r.height * vidAspect;             // black bars left & right
+  return { left: r.left + (r.width - w) / 2, top: r.top, width: w, height: r.height };
+}
+
+// Mouse-move sender: always transmits the LATEST position (~60fps). A
+// leading-edge throttle drops the final move, leaving the cursor behind.
+let pendingMove = null, moveTimer = null;
+function flushMove() {
+  if (pendingMove && dc()) {
+    dataChannel.send(JSON.stringify(pendingMove));
+    pendingMove = null;
+    moveTimer = setTimeout(flushMove, 16);
+  } else {
+    moveTimer = null;
+  }
+}
+
+function sendMouseMove(e) {
+  if (!mouseEnabled || !dc()) return;
+  const c = videoContentRect();
+  let x = (e.clientX - c.left) / c.width;
+  let y = (e.clientY - c.top)  / c.height;
+  x = Math.max(0, Math.min(1, x));
+  y = Math.max(0, Math.min(1, y));
+  pendingMove = { type: 'mousemove', x, y };
+  if (!moveTimer) flushMove();
+}
 
 video.addEventListener('mousemove', sendMouseMove);
 

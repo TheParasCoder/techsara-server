@@ -99,8 +99,13 @@ socket.on('login_success', () => {
 socket.on('session_restored', (data) => {
   targetClientId = data.clientId;
   document.getElementById('session-client-name').textContent = data.clientId;
+  showVideo();  // Show topbar immediately so Reconnect button is visible
   log('Session restored with ' + data.clientId + ' â€” reconnecting video...');
-  // Client will send a fresh WebRTC offer via support_request
+  // Close any stale peer and force a fresh WebRTC handshake
+  if (peerConnection) { peerConnection.close(); peerConnection = null; }
+  if (dataChannel)    { dataChannel.close();    dataChannel = null;    }
+  video.srcObject = null;
+  socket.emit('request_connection', data.clientId);
 });
 
 socket.on('login_error', (msg) => {
@@ -164,6 +169,18 @@ function connectToClient(clientId) {
   document.getElementById('session-client-name').textContent = clientId;
   log('Requesting connection to ' + clientId);
   socket.emit('request_connection', clientId);
+}
+
+// â”€â”€ Reconnect button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+document.getElementById('reconnect-btn').addEventListener('click', reconnectVideo);
+
+function reconnectVideo() {
+  if (!targetClientId) return;
+  log('Forcing video reconnect...');
+  if (peerConnection) { peerConnection.close(); peerConnection = null; }
+  if (dataChannel)    { dataChannel.close();    dataChannel = null;    }
+  video.srcObject = null;
+  socket.emit('request_connection', targetClientId);
 }
 
 // â”€â”€ Disconnect button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

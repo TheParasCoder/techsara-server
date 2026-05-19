@@ -6,33 +6,32 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
-// State maps
-const clients = new Map();       // clientId -> socket.id
-const supports = new Map();      // socket.id -> { name, targetClientId }
-const activeSessions = new Map();// clientId -> supportSocketId
+// clientId -> { socketId, available }
+const clients = new Map();
+// socketId -> { name, targetClientId }
+const supports = new Map();
+// clientId -> supportSocketId
+const activeSessions = new Map();
 
-// Serve dashboard (lives next to this file in the deploy package)
 app.use(express.static(path.join(__dirname, 'dashboard')));
 
-// Health check endpoint (used by Render + keep-alive pingers to prevent cold starts)
 app.get('/healthz', (req, res) => {
   res.json({ status: 'ok', clients: clients.size, time: new Date().toISOString() });
 });
 
-// Download routes (client installer is distributed separately, not from this server)
+// Redirect to GitHub Release for installer download
 app.get('/download/windows', (req, res) => {
-  res.status(501).send('Windows client installer is distributed separately.');
+  res.redirect('https://github.com/TheParasCoder/techsara-server/releases/latest/download/TechsaraSupport-Setup.exe');
 });
 
 app.get('/download/mac', (req, res) => {
   res.status(501).send('MacOS support coming soon');
 });
 
-// Debug endpoint
 app.get('/debug', (req, res) => {
   res.json({
-    clients: Array.from(clients.entries()).map(([id, sid]) => ({ id, socketId: sid })),
-    supports: Array.from(supports.entries()).map(([sid, s]) => ({ socketId: sid, name: s.name, target: s.targetClientId })),
+    clients: Array.from(clients.entries()).map(([id, c]) => ({ id, socketId: c.socketId, available: c.available })),
+    supports: Array.from(supports.entries()),
     activeSessions: Array.from(activeSessions.entries()),
     serverTime: new Date().toISOString()
   });
@@ -42,14 +41,39 @@ const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
+// Central session cleanup — called from any disconnect/end path
+function endSession(clientId, reason) {
+  const supportSocketId = activeSessions.get(clientId);
+  activeSessions.delete(clientId);
+
+  const clientData = clients.get(clientId);
+  if (clientData) clientData.available = false;
+
+  if (supportSocketId) {
+    const sup = supports.get(supportSocketId);
+    if (sup) sup.targetClientId = null;
+    io.to(supportSocketId).emit('session_ended', { clientId, reason });
+  }
+
+  if (clientData) {
+    io.to(clientData.socketId).emit('session_ended', { reason });
+  }
+
+  console.log(`Session ended: ${clientId} — reason: ${reason}`);
+  broadcastClients();
+}
+
+// Only broadcast clients that have enabled access
 function broadcastClients() {
-  const clientList = Array.from(clients.keys()).map(id => ({
-    id,
-    isBusy: activeSessions.has(id),
-    agentName: activeSessions.has(id)
-      ? (supports.get(activeSessions.get(id))?.name || 'Agent')
-      : null
-  }));
+  const clientList = Array.from(clients.entries())
+    .filter(([, c]) => c.available)
+    .map(([id, c]) => ({
+      id,
+      isBusy: activeSessions.has(id),
+      agentName: activeSessions.has(id)
+        ? (supports.get(activeSessions.get(id))?.name || 'Agent')
+        : null
+    }));
 
   for (const socketId of supports.keys()) {
     io.to(socketId).emit('clients_list', clientList);
@@ -61,29 +85,23 @@ io.on('connection', (socket) => {
 
   socket.on('register', (data) => {
     if (data.type === 'client') {
-      // If same clientId reconnects, update its socket.id
-      clients.set(data.clientId, socket.id);
+      clients.set(data.clientId, { socketId: socket.id, available: false });
       socket.clientId = data.clientId;
-      console.log(`Client registered: ${data.clientId}`);
-      broadcastClients();
+      console.log(`Client registered: ${data.clientId} (access not yet granted)`);
 
     } else if (data.type === 'support') {
       if (data.password === 'admin123') {
         const agentName = (data.name || 'Agent').trim();
 
-        // Clear any stale sessions from a previous connection with the same name
         for (const [sid, sup] of supports.entries()) {
           if (sup.name === agentName && sid !== socket.id) {
-            console.log(`Clearing stale session for agent: ${agentName}`);
-            if (sup.targetClientId) {
-              activeSessions.delete(sup.targetClientId);
-            }
+            if (sup.targetClientId) activeSessions.delete(sup.targetClientId);
             supports.delete(sid);
           }
         }
 
         supports.set(socket.id, { name: agentName, targetClientId: null });
-        console.log(`Support registered: ${agentName}`);
+        console.log(`Support agent registered: ${agentName}`);
         socket.emit('login_success');
         broadcastClients();
       } else {
@@ -92,13 +110,26 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Client enables or disables support access
+  socket.on('set_availability', (data) => {
+    const clientData = clients.get(socket.clientId);
+    if (!clientData) return;
+    clientData.available = !!data.available;
+    console.log(`Client ${socket.clientId} set availability: ${clientData.available}`);
+    broadcastClients();
+  });
+
+  // Support agent requests to connect to a client
   socket.on('request_connection', (clientId) => {
     const support = supports.get(socket.id);
     if (!support) return;
 
-    const existingSocketId = activeSessions.get(clientId);
+    const clientData = clients.get(clientId);
+    if (!clientData || !clientData.available) {
+      return socket.emit('session_blocked', 'Client has not enabled support access');
+    }
 
-    // Block if a DIFFERENT agent is in session
+    const existingSocketId = activeSessions.get(clientId);
     if (existingSocketId && existingSocketId !== socket.id) {
       const existingAgent = supports.get(existingSocketId);
       if (existingAgent && existingAgent.name !== support.name) {
@@ -106,30 +137,28 @@ io.on('connection', (socket) => {
       }
     }
 
-    const clientSocketId = clients.get(clientId);
-    if (!clientSocketId) {
-      return socket.emit('session_blocked', 'Client is not connected');
-    }
-
-    // Set session
     activeSessions.set(clientId, socket.id);
     support.targetClientId = clientId;
 
-    io.to(clientSocketId).emit('support_request', socket.id);
+    io.to(clientData.socketId).emit('support_request', {
+      supportId: socket.id,
+      agentName: support.name
+    });
+
     console.log(`Session started: ${support.name} -> ${clientId}`);
     broadcastClients();
   });
 
+  // Support ends the session
   socket.on('end_session', (clientId) => {
-    activeSessions.delete(clientId);
-    const support = supports.get(socket.id);
-    if (support) support.targetClientId = null;
+    endSession(clientId, 'agent_ended');
+  });
 
-    const clientSocketId = clients.get(clientId);
-    if (clientSocketId) io.to(clientSocketId).emit('end_session');
-
-    console.log(`Session ended for client: ${clientId}`);
-    broadcastClients();
+  // Client ends the session from their side
+  socket.on('client_disconnect', () => {
+    if (socket.clientId && activeSessions.has(socket.clientId)) {
+      endSession(socket.clientId, 'client_ended');
+    }
   });
 
   // WebRTC relay
@@ -138,8 +167,9 @@ io.on('connection', (socket) => {
   socket.on('ice-candidate', (data) => io.to(data.target).emit('ice-candidate', { sender: socket.id, candidate: data.candidate }));
 
   socket.on('force_reset_all', () => {
-    console.log('FORCE RESET by', socket.id);
+    console.log('Force reset by', socket.id);
     activeSessions.clear();
+    clients.forEach(c => { c.available = false; });
     io.emit('server_reset');
     broadcastClients();
   });
@@ -147,24 +177,22 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('Disconnected:', socket.id);
 
-    // Clean up client
     if (socket.clientId) {
+      if (activeSessions.has(socket.clientId)) {
+        endSession(socket.clientId, 'client_offline');
+      }
       clients.delete(socket.clientId);
-      activeSessions.delete(socket.clientId);
+      broadcastClients();
     }
 
-    // Clean up support agent
     if (supports.has(socket.id)) {
       const sup = supports.get(socket.id);
       if (sup.targetClientId) {
-        activeSessions.delete(sup.targetClientId);
-        const clientSid = clients.get(sup.targetClientId);
-        if (clientSid) io.to(clientSid).emit('end_session');
+        endSession(sup.targetClientId, 'agent_offline');
       }
       supports.delete(socket.id);
+      broadcastClients();
     }
-
-    broadcastClients();
   });
 });
 

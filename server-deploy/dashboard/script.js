@@ -7,6 +7,10 @@ let targetClientId = null;
 let agentName      = '';
 let logOpen        = false;
 
+// Remote control toggles (on by default)
+let mouseEnabled    = true;
+let keyboardEnabled = true;
+
 const iceConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -121,10 +125,11 @@ socket.on('clients_list', (clients) => {
   const countEl = document.getElementById('client-count');
   const listEl  = document.getElementById('client-list');
 
-  countEl.textContent = clients.length;
+  const availableCount = clients.filter(c => c.available || c.isBusy).length;
+  countEl.textContent = availableCount;
 
   if (clients.length === 0) {
-    listEl.innerHTML = '<div class="empty-state">No clients available.<br>Clients must click <strong>"Allow Support Access"</strong> in their app.</div>';
+    listEl.innerHTML = '<div class="empty-state">No clients yet.<br>Share the download link so clients install the app.</div>';
     return;
   }
 
@@ -132,20 +137,31 @@ socket.on('clients_list', (clients) => {
   clients.forEach(client => {
     const isMySession = client.isBusy && client.agentName === agentName;
     const isActive    = targetClientId === client.id;
+    const isOffline   = !client.online;
+    const isUnavail   = client.online && !client.available && !client.isBusy;
+
+    let extraClass = '';
+    if (isActive) extraClass = ' active';
+    else if (client.isBusy && !isMySession) extraClass = ' busy';
+    else if (isOffline) extraClass = ' offline';
+    else if (isUnavail) extraClass = ' unavailable';
 
     const div = document.createElement('div');
-    div.className = `client-item${isActive ? ' active' : ''}${client.isBusy && !isMySession ? ' busy' : ''}`;
+    div.className = 'client-item' + extraClass;
 
     let statusText = 'Available â€” click to connect';
-    if (isMySession) statusText = 'In session with you';
-    else if (client.isBusy) statusText = `In session with ${client.agentName}`;
+    let statusClass = '';
+    if (isMySession)       { statusText = 'In session with you'; }
+    else if (client.isBusy){ statusText = `In session with ${client.agentName}`; }
+    else if (isOffline)    { statusText = 'App is closed â€” will reconnect automatically'; statusClass = 'status-offline'; }
+    else if (isUnavail)    { statusText = 'Ask client to click "Allow Support Access"'; statusClass = 'status-unavail'; }
 
     div.innerHTML = `
       <div class="client-item-name">${client.id}</div>
-      <div class="client-item-status">${statusText}</div>
+      <div class="client-item-status ${statusClass}">${statusText}</div>
     `;
 
-    if (!client.isBusy || isMySession) {
+    if ((client.available && !client.isBusy) || isMySession) {
       div.addEventListener('click', () => {
         if (targetClientId === client.id) return;
         connectToClient(client.id);
@@ -245,6 +261,18 @@ socket.on('offer', async (data) => {
   peerConnection.ondatachannel = (event) => {
     dataChannel = event.channel;
     dataChannel.onopen = () => log('Input channel open â€” remote control active');
+    dataChannel.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'clipboard_content') {
+          if (!msg.text) { showToast('Client clipboard is empty', true); return; }
+          navigator.clipboard.writeText(msg.text).then(() => {
+            showToast('Client clipboard copied âœ“');
+            log('Got client clipboard (' + msg.text.length + ' chars)');
+          }).catch(() => showToast('Could not write to your clipboard', true));
+        }
+      } catch (_) {}
+    };
   };
 
   await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
@@ -268,6 +296,56 @@ socket.on('ice-candidate', async (data) => {
   }
 });
 
+// â”€â”€ Client went offline (session preserved) â”€â”€
+socket.on('client_reconnecting', (data) => {
+  log('Client ' + data.clientId + ' went offline â€” session preserved, waiting to reconnect...');
+});
+
+// â”€â”€ Client came back online â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+socket.on('client_reconnected', (data) => {
+  log('Client ' + data.clientId + ' is back online â€” video reconnecting...');
+  if (peerConnection) { peerConnection.close(); peerConnection = null; }
+  if (dataChannel)    { dataChannel.close();    dataChannel = null;    }
+  video.srcObject = null;
+  // Client will send a fresh offer
+});
+
+// â”€â”€ Controls bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+document.getElementById('ctrl-mouse').addEventListener('click', () => {
+  mouseEnabled = !mouseEnabled;
+  const btn = document.getElementById('ctrl-mouse');
+  btn.textContent = mouseEnabled ? 'ðŸ–± Mouse: ON' : 'ðŸ–± Mouse: OFF';
+  btn.className = 'ctrl-toggle' + (mouseEnabled ? ' ctrl-on' : ' ctrl-off');
+  log('Mouse control: ' + (mouseEnabled ? 'ON' : 'OFF'));
+});
+
+document.getElementById('ctrl-keyboard').addEventListener('click', () => {
+  keyboardEnabled = !keyboardEnabled;
+  const btn = document.getElementById('ctrl-keyboard');
+  btn.textContent = keyboardEnabled ? 'âŒ¨ Keyboard: ON' : 'âŒ¨ Keyboard: OFF';
+  btn.className = 'ctrl-toggle' + (keyboardEnabled ? ' ctrl-on' : ' ctrl-off');
+  log('Keyboard control: ' + (keyboardEnabled ? 'ON' : 'OFF'));
+});
+
+document.getElementById('ctrl-send-clip').addEventListener('click', async () => {
+  if (!dataChannel || dataChannel.readyState !== 'open') return;
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text) { showToast('Your clipboard is empty', true); return; }
+    dataChannel.send(JSON.stringify({ type: 'clipboard_write', text }));
+    showToast('Clipboard sent to client âœ“');
+    log('Clipboard sent to client (' + text.length + ' chars)');
+  } catch (e) {
+    showToast('Clipboard access denied â€” allow in browser settings', true);
+  }
+});
+
+document.getElementById('ctrl-get-clip').addEventListener('click', () => {
+  if (!dataChannel || dataChannel.readyState !== 'open') return;
+  dataChannel.send(JSON.stringify({ type: 'clipboard_request' }));
+  log('Requesting clipboard from client...');
+});
+
 // â”€â”€ Force reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 document.getElementById('force-reset-btn').addEventListener('click', () => {
   if (confirm('Disconnect ALL active sessions? Clients will need to re-enable access.')) {
@@ -284,11 +362,21 @@ socket.on('server_reset', () => {
 function showVideo() {
   document.getElementById('placeholder').style.display = 'none';
   document.getElementById('video-topbar').style.display = 'flex';
+  document.getElementById('controls-bar').style.display = 'flex';
 }
 
 function showPlaceholder() {
   document.getElementById('placeholder').style.display = 'flex';
   document.getElementById('video-topbar').style.display = 'none';
+  document.getElementById('controls-bar').style.display = 'none';
+}
+
+function showToast(msg, isError) {
+  const t = document.getElementById('clip-toast');
+  t.textContent = msg;
+  t.style.background = isError ? 'rgba(239,68,68,0.92)' : 'rgba(16,185,129,0.92)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
 }
 
 // â”€â”€ Remote input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -301,8 +389,10 @@ const throttle = (fn, ms) => {
   };
 };
 
+function dc() { return dataChannel && dataChannel.readyState === 'open'; }
+
 const sendMouseMove = throttle((e) => {
-  if (!dataChannel || dataChannel.readyState !== 'open') return;
+  if (!mouseEnabled || !dc()) return;
   const r = video.getBoundingClientRect();
   dataChannel.send(JSON.stringify({
     type: 'mousemove',
@@ -314,25 +404,35 @@ const sendMouseMove = throttle((e) => {
 video.addEventListener('mousemove', sendMouseMove);
 
 video.addEventListener('mousedown', (e) => {
-  if (!dataChannel || dataChannel.readyState !== 'open') return;
+  if (!mouseEnabled || !dc()) return;
   const btn = e.button === 0 ? 'left' : e.button === 2 ? 'right' : 'middle';
   dataChannel.send(JSON.stringify({ type: 'mousedown', button: btn }));
 });
 
 video.addEventListener('mouseup', (e) => {
-  if (!dataChannel || dataChannel.readyState !== 'open') return;
+  if (!mouseEnabled || !dc()) return;
   const btn = e.button === 0 ? 'left' : e.button === 2 ? 'right' : 'middle';
   dataChannel.send(JSON.stringify({ type: 'mouseup', button: btn }));
 });
 
 video.addEventListener('contextmenu', e => e.preventDefault());
 
+video.addEventListener('wheel', (e) => {
+  if (!mouseEnabled || !dc()) return;
+  e.preventDefault();
+  dataChannel.send(JSON.stringify({ type: 'scroll', deltaX: e.deltaX, deltaY: e.deltaY }));
+}, { passive: false });
+
 window.addEventListener('keydown', (e) => {
-  if (!dataChannel || dataChannel.readyState !== 'open') return;
+  if (!keyboardEnabled || !dc()) return;
+  // Prevent browser shortcuts from firing when sending to client
+  if (e.ctrlKey || e.altKey || e.key.startsWith('F') || ['Tab','Delete','Backspace','Insert','Home','End','PageUp','PageDown'].includes(e.key)) {
+    e.preventDefault();
+  }
   dataChannel.send(JSON.stringify({ type: 'keydown', key: e.key, code: e.code }));
-});
+}, true);
 
 window.addEventListener('keyup', (e) => {
-  if (!dataChannel || dataChannel.readyState !== 'open') return;
+  if (!keyboardEnabled || !dc()) return;
   dataChannel.send(JSON.stringify({ type: 'keyup', key: e.key, code: e.code }));
-});
+}, true);

@@ -100,12 +100,12 @@ socket.on('session_restored', (data) => {
   targetClientId = data.clientId;
   document.getElementById('session-client-name').textContent = data.clientId;
   showVideo();  // Show topbar immediately so Reconnect button is visible
-  log('Session restored with ' + data.clientId + ' â€” reconnecting video...');
-  // Close any stale peer and force a fresh WebRTC handshake
+  log('Session restored with ' + data.clientId + ' â€” waiting for client to reconnect...');
+  // Close any stale peer â€” server already sends support_request to client
   if (peerConnection) { peerConnection.close(); peerConnection = null; }
   if (dataChannel)    { dataChannel.close();    dataChannel = null;    }
   video.srcObject = null;
-  socket.emit('request_connection', data.clientId);
+  // NOTE: do NOT emit request_connection here â€” server already sent support_request directly
 });
 
 socket.on('login_error', (msg) => {

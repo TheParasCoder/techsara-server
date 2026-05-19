@@ -29,14 +29,14 @@ function log(msg) {
   el.scrollTop = el.scrollHeight;
 }
 
-// â”€â”€ Log toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Log toggle ──────────────────────────
 document.getElementById('log-toggle').addEventListener('click', () => {
   logOpen = !logOpen;
   document.getElementById('log-body').style.display = logOpen ? 'block' : 'none';
-  document.getElementById('log-chevron').textContent = logOpen ? 'â–´' : 'â–¾';
+  document.getElementById('log-chevron').textContent = logOpen ? '▴' : '▾';
 });
 
-// â”€â”€ Server connection status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Server connection status ─────────────
 const serverIndicator = document.getElementById('server-indicator');
 
 socket.on('connect', () => {
@@ -58,7 +58,7 @@ socket.on('disconnect', () => {
   log('Disconnected from server');
 });
 
-// â”€â”€ Login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Login ───────────────────────────────
 document.getElementById('login-btn').addEventListener('click', doLogin);
 document.getElementById('admin-password').addEventListener('keydown', e => {
   if (e.key === 'Enter') doLogin();
@@ -96,7 +96,7 @@ socket.on('login_success', () => {
     });
   });
 
-  log('Login successful â€” welcome, ' + agentName);
+  log('Login successful — welcome, ' + agentName);
 });
 
 // Fired when logging back in restores a preserved session
@@ -104,12 +104,12 @@ socket.on('session_restored', (data) => {
   targetClientId = data.clientId;
   document.getElementById('session-client-name').textContent = data.clientId;
   showVideo();  // Show topbar immediately so Reconnect button is visible
-  log('Session restored with ' + data.clientId + ' â€” waiting for client to reconnect...');
-  // Close any stale peer â€” server already sends support_request to client
+  log('Session restored with ' + data.clientId + ' — waiting for client to reconnect...');
+  // Close any stale peer — server already sends support_request to client
   if (peerConnection) { peerConnection.close(); peerConnection = null; }
   if (dataChannel)    { dataChannel.close();    dataChannel = null;    }
   video.srcObject = null;
-  // NOTE: do NOT emit request_connection here â€” server already sent support_request directly
+  // NOTE: do NOT emit request_connection here — server already sent support_request directly
 });
 
 socket.on('login_error', (msg) => {
@@ -120,7 +120,7 @@ socket.on('login_error', (msg) => {
   err.style.display = 'block';
 });
 
-// â”€â”€ Client list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Client list ──────────────────────────
 socket.on('clients_list', (clients) => {
   const countEl = document.getElementById('client-count');
   const listEl  = document.getElementById('client-list');
@@ -149,11 +149,11 @@ socket.on('clients_list', (clients) => {
     const div = document.createElement('div');
     div.className = 'client-item' + extraClass;
 
-    let statusText = 'Available â€” click to connect';
+    let statusText = 'Available — click to connect';
     let statusClass = '';
     if (isMySession)       { statusText = 'In session with you'; }
     else if (client.isBusy){ statusText = `In session with ${client.agentName}`; }
-    else if (isOffline)    { statusText = 'App is closed â€” will reconnect automatically'; statusClass = 'status-offline'; }
+    else if (isOffline)    { statusText = 'App is closed — will reconnect automatically'; statusClass = 'status-offline'; }
     else if (isUnavail)    { statusText = 'Ask client to click "Allow Support Access"'; statusClass = 'status-unavail'; }
 
     div.innerHTML = `
@@ -172,13 +172,13 @@ socket.on('clients_list', (clients) => {
   });
 });
 
-// â”€â”€ Session blocked â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Session blocked ──────────────────────
 socket.on('session_blocked', (msg) => {
   log('Blocked: ' + msg);
   alert('Cannot connect: ' + msg);
 });
 
-// â”€â”€ Connect to client â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Connect to client ────────────────────
 function connectToClient(clientId) {
   if (peerConnection) closeConnection();
   targetClientId = clientId;
@@ -187,7 +187,7 @@ function connectToClient(clientId) {
   socket.emit('request_connection', clientId);
 }
 
-// â”€â”€ Reconnect button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Reconnect button ─────────────────────
 document.getElementById('reconnect-btn').addEventListener('click', reconnectVideo);
 
 function reconnectVideo() {
@@ -199,7 +199,7 @@ function reconnectVideo() {
   socket.emit('request_connection', targetClientId);
 }
 
-// â”€â”€ Disconnect button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Disconnect button ────────────────────
 document.getElementById('disconnect-btn').addEventListener('click', closeConnection);
 
 function closeConnection() {
@@ -215,7 +215,7 @@ function closeConnection() {
   log('Session ended.');
 }
 
-// â”€â”€ Session ended by server (client disconnected) â”€â”€
+// ── Session ended by server (client disconnected) ──
 socket.on('session_ended', () => {
   log('Session ended (remote side)');
   if (peerConnection) { peerConnection.close(); peerConnection = null; }
@@ -225,7 +225,7 @@ socket.on('session_ended', () => {
   showPlaceholder();
 });
 
-// â”€â”€ Fullscreen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Fullscreen ───────────────────────────
 document.getElementById('fullscreen-btn').addEventListener('click', () => {
   const wrapper = document.getElementById('video-wrapper');
   if (!document.fullscreenElement) {
@@ -235,7 +235,7 @@ document.getElementById('fullscreen-btn').addEventListener('click', () => {
   }
 });
 
-// â”€â”€ WebRTC â€” receive offer from client â”€â”€â”€
+// ── WebRTC — receive offer from client ───
 socket.on('offer', async (data) => {
   log('WebRTC offer received from client');
   peerConnection = new RTCPeerConnection(iceConfig);
@@ -260,14 +260,14 @@ socket.on('offer', async (data) => {
 
   peerConnection.ondatachannel = (event) => {
     dataChannel = event.channel;
-    dataChannel.onopen = () => log('Input channel open â€” remote control active');
+    dataChannel.onopen = () => log('Input channel open — remote control active');
     dataChannel.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
         if (msg.type === 'clipboard_content') {
           if (!msg.text) { showToast('Client clipboard is empty', true); return; }
           navigator.clipboard.writeText(msg.text).then(() => {
-            showToast('Client clipboard copied âœ“');
+            showToast('Client clipboard copied ✓');
             log('Got client clipboard (' + msg.text.length + ' chars)');
           }).catch(() => showToast('Could not write to your clipboard', true));
         }
@@ -296,25 +296,25 @@ socket.on('ice-candidate', async (data) => {
   }
 });
 
-// â”€â”€ Client went offline (session preserved) â”€â”€
+// ── Client went offline (session preserved) ──
 socket.on('client_reconnecting', (data) => {
-  log('Client ' + data.clientId + ' went offline â€” session preserved, waiting to reconnect...');
+  log('Client ' + data.clientId + ' went offline — session preserved, waiting to reconnect...');
 });
 
-// â”€â”€ Client came back online â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Client came back online ───────────────
 socket.on('client_reconnected', (data) => {
-  log('Client ' + data.clientId + ' is back online â€” video reconnecting...');
+  log('Client ' + data.clientId + ' is back online — video reconnecting...');
   if (peerConnection) { peerConnection.close(); peerConnection = null; }
   if (dataChannel)    { dataChannel.close();    dataChannel = null;    }
   video.srcObject = null;
   // Client will send a fresh offer
 });
 
-// â”€â”€ Controls bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Controls bar ─────────────────────────
 document.getElementById('ctrl-mouse').addEventListener('click', () => {
   mouseEnabled = !mouseEnabled;
   const btn = document.getElementById('ctrl-mouse');
-  btn.textContent = mouseEnabled ? 'ðŸ–± Mouse: ON' : 'ðŸ–± Mouse: OFF';
+  document.getElementById('ctrl-mouse-label').textContent = mouseEnabled ? 'Mouse: ON' : 'Mouse: OFF';
   btn.className = 'ctrl-toggle' + (mouseEnabled ? ' ctrl-on' : ' ctrl-off');
   log('Mouse control: ' + (mouseEnabled ? 'ON' : 'OFF'));
 });
@@ -322,7 +322,7 @@ document.getElementById('ctrl-mouse').addEventListener('click', () => {
 document.getElementById('ctrl-keyboard').addEventListener('click', () => {
   keyboardEnabled = !keyboardEnabled;
   const btn = document.getElementById('ctrl-keyboard');
-  btn.textContent = keyboardEnabled ? 'âŒ¨ Keyboard: ON' : 'âŒ¨ Keyboard: OFF';
+  document.getElementById('ctrl-keyboard-label').textContent = keyboardEnabled ? 'Keyboard: ON' : 'Keyboard: OFF';
   btn.className = 'ctrl-toggle' + (keyboardEnabled ? ' ctrl-on' : ' ctrl-off');
   log('Keyboard control: ' + (keyboardEnabled ? 'ON' : 'OFF'));
 });
@@ -333,10 +333,10 @@ document.getElementById('ctrl-send-clip').addEventListener('click', async () => 
     const text = await navigator.clipboard.readText();
     if (!text) { showToast('Your clipboard is empty', true); return; }
     dataChannel.send(JSON.stringify({ type: 'clipboard_write', text }));
-    showToast('Clipboard sent to client âœ“');
+    showToast('Clipboard sent to client ✓');
     log('Clipboard sent to client (' + text.length + ' chars)');
   } catch (e) {
-    showToast('Clipboard access denied â€” allow in browser settings', true);
+    showToast('Clipboard access denied — allow in browser settings', true);
   }
 });
 
@@ -346,7 +346,7 @@ document.getElementById('ctrl-get-clip').addEventListener('click', () => {
   log('Requesting clipboard from client...');
 });
 
-// â”€â”€ Force reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Force reset ──────────────────────────
 document.getElementById('force-reset-btn').addEventListener('click', () => {
   if (confirm('Disconnect ALL active sessions? Clients will need to re-enable access.')) {
     socket.emit('force_reset_all');
@@ -358,7 +358,7 @@ socket.on('server_reset', () => {
   window.location.reload();
 });
 
-// â”€â”€ UI helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── UI helpers ───────────────────────────
 function showVideo() {
   document.getElementById('placeholder').style.display = 'none';
   document.getElementById('video-topbar').style.display = 'flex';
@@ -379,7 +379,7 @@ function showToast(msg, isError) {
   setTimeout(() => t.classList.remove('show'), 2200);
 }
 
-// â”€â”€ Remote input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Remote input ─────────────────────────
 const throttle = (fn, ms) => {
   let t;
   return (...args) => {

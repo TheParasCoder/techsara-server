@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Techsara Remote Support | Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            Techsara Remote
+        </div>
+        <button id="force-reset-btn" style="background: #ef4444; border:none; color:white; padding: 4px 12px; border-radius: 4px; cursor:pointer; font-size: 0.7rem; font-weight: bold; margin-left: auto; margin-right: 1rem;">
+            FORCE SERVER RESET
+        </button>
+        <div id="connection-status" class="status-badge" style="display: none;">Live Server</div>
+    </header>
+
+    <main>
+        <div class="sidebar">
+            <div class="card auth-section" id="login-container">
+                <h3>Admin Login</h3>
+                <p style="color: var(--text-secondary); font-size: 0.85rem;">Authenticate to access remote clients.</p>
+                <input type="text" id="admin-name" placeholder="Your Name (e.g. Agent John)" style="margin-bottom: 0.5rem;">
+                <input type="password" id="admin-password" placeholder="Enter Admin Password">
+                <button id="login-btn">
+                    Access Dashboard
+                </button>
+            </div>
+
+            <div class="card client-list-section" id="dashboard-controls" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>Active Clients</h3>
+                    <span id="client-count" class="status-badge">0</span>
+                </div>
+                <div id="client-list">
+                    <!-- Clients will appear here -->
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; margin-top: 2rem;">No clients online</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Download Client</h3>
+                <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem;">Deploy this agent to remote machines to start supporting.</p>
+                <div class="download-options">
+                    <a href="/download/windows" style="text-decoration: none; flex: 1;">
+                        <button class="btn-download">
+                            Windows (.zip)
+                        </button>
+                    </a>
+                    <a href="/download/mac" style="text-decoration: none; flex: 1;">
+                        <button class="btn-download" disabled title="Coming soon">
+                            MacOS (.dmg)
+                        </button>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="video-view" id="video-container">
+                <div class="video-placeholder" id="placeholder">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.2;"><path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"></path><path d="M12 4v1M17.66 6.34l-.7.7M20 12h-1M17.66 17.66l-.7-.7M12 20v-1M6.34 17.66l.7-.7M4 12h1M6.34 6.34l.7-.7"></path></svg>
+                    <p>Select a client to start remote session</p>
+                </div>
+                <video id="remote-video" autoplay playsinline></video>
+                
+                <div class="controls-overlay" id="video-controls" style="display: none;">
+                    <button id="disconnect-btn" style="background: var(--danger); width: auto; padding: 8px 20px;">
+                        End Session
+                    </button>
+                </div>
+            </div>
+
+            <!-- New Log Area -->
+            <div style="margin-top: 1rem; background: #0f172a; padding: 1rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Session Logs</div>
+                <div id="debug-logs" style="font-family: 'Courier New', Courier, monospace; font-size: 0.75rem; color: #10b981; max-height: 100px; overflow-y: auto; line-height: 1.4;">
+                    > System ready. Waiting for session...
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: techsara-signaling-server
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true

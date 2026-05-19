@@ -337,7 +337,7 @@ aside.sidebar {
   min-height: 0;
 }
 
-video { width: 100%; height: 100%; object-fit: contain; display: block; }
+video { width: 100%; height: 100%; object-fit: contain; display: block; cursor: none; }
 
 .video-placeholder {
   position: absolute;
@@ -364,6 +364,7 @@ video { width: 100%; height: 100%; object-fit: contain; display: block; }
   padding: 10px 14px;
   background: linear-gradient(to bottom, rgba(0,0,0,0.72) 0%, transparent 100%);
   z-index: 10;
+  pointer-events: none;
 }
 
 .session-info {
@@ -402,6 +403,7 @@ video { width: 100%; height: 100%; object-fit: contain; display: block; }
   font-weight: 600;
   cursor: pointer;
   transition: background 0.18s;
+  pointer-events: auto;
 }
 
 .vid-btn:hover { background: rgba(255,255,255,0.24); }
@@ -423,6 +425,7 @@ video { width: 100%; height: 100%; object-fit: contain; display: block; }
   background: linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 100%);
   z-index: 10;
   flex-wrap: wrap;
+  pointer-events: none;
 }
 
 .ctrl-group { display: flex; align-items: center; gap: 5px; }
@@ -441,6 +444,7 @@ video { width: 100%; height: 100%; object-fit: contain; display: block; }
   cursor: pointer;
   transition: all 0.18s;
   white-space: nowrap;
+  pointer-events: auto;
 }
 
 .ctrl-toggle:hover { background: rgba(16,185,129,0.4); }
@@ -464,6 +468,7 @@ video { width: 100%; height: 100%; object-fit: contain; display: block; }
   cursor: pointer;
   transition: all 0.18s;
   white-space: nowrap;
+  pointer-events: auto;
 }
 
 .ctrl-clip:hover { background: rgba(59,130,246,0.35); }

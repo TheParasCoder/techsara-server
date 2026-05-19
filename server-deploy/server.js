@@ -12,9 +12,9 @@ const clients = new Map();
 const supports = new Map();
 // clientId -> supportSocketId
 const activeSessions = new Map();
-// agentName -> { clientId }  â€” preserved sessions (agent offline, session kept until explicit disconnect)
+// agentName -> { clientId }  — preserved sessions (agent offline, session kept until explicit disconnect)
 const reconnectTimers = new Map();
-// clientId -> { agentSocketId }  â€” preserved sessions when CLIENT goes offline
+// clientId -> { agentSocketId }  — preserved sessions when CLIENT goes offline
 const clientReconnectTimers = new Map();
 
 app.use(express.static(path.join(__dirname, 'dashboard')));
@@ -45,7 +45,7 @@ const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
-// Resolve agent name for a clientId â€” checks live sessions AND grace-period reconnects
+// Resolve agent name for a clientId — checks live sessions AND grace-period reconnects
 function getSessionAgentName(clientId) {
   const sid = activeSessions.get(clientId);
   if (sid && supports.has(sid)) return supports.get(sid).name;
@@ -72,12 +72,12 @@ function endSession(clientId, reason) {
     io.to(clientData.socketId).emit('session_ended', { reason });
   }
 
-  console.log(`Session ended: ${clientId} â€” reason: ${reason}`);
+  console.log(`Session ended: ${clientId} — reason: ${reason}`);
   broadcastClients();
 }
 
 function broadcastClients() {
-  // Send ALL known clients â€” dashboard shows unavailable ones with "ask to enable" message
+  // Send ALL known clients — dashboard shows unavailable ones with "ask to enable" message
   const clientList = Array.from(clients.entries())
     .map(([id, c]) => ({
       id,
@@ -113,7 +113,7 @@ io.on('connection', (socket) => {
           io.to(socket.id).emit('support_request', { supportId: agentSocketId, agentName: sup.name });
           // Tell agent the client is back
           io.to(agentSocketId).emit('client_reconnected', { clientId: data.clientId });
-          console.log(`Client ${data.clientId} reconnected â€” session with ${sup.name} restored`);
+          console.log(`Client ${data.clientId} reconnected — session with ${sup.name} restored`);
         }
       }
 
@@ -124,7 +124,7 @@ io.on('connection', (socket) => {
 
       const agentName = (data.name || 'Agent').trim();
 
-      // â”€â”€ Grace-period reconnect: restore the session if timer is pending â”€â”€
+      // ── Grace-period reconnect: restore the session if timer is pending ──
       if (reconnectTimers.has(agentName)) {
         const pending = reconnectTimers.get(agentName);
         clearTimeout(pending.timer);
@@ -142,12 +142,12 @@ io.on('connection', (socket) => {
           io.to(clientData.socketId).emit('support_request', { supportId: socket.id, agentName });
         }
 
-        console.log(`Support ${agentName} reconnected â€” session with ${clientId} restored`);
+        console.log(`Support ${agentName} reconnected — session with ${clientId} restored`);
         broadcastClients();
         return;
       }
 
-      // â”€â”€ Clear any other stale entries from the same agent name â”€â”€
+      // ── Clear any other stale entries from the same agent name ──
       for (const [sid, sup] of supports.entries()) {
         if (sup.name === agentName && sid !== socket.id) {
           if (sup.targetClientId) activeSessions.delete(sup.targetClientId);
@@ -155,7 +155,7 @@ io.on('connection', (socket) => {
         }
       }
 
-      // â”€â”€ Normal login â”€â”€
+      // ── Normal login ──
       supports.set(socket.id, { name: agentName, targetClientId: null });
       console.log(`Support registered: ${agentName}`);
       socket.emit('login_success');
@@ -232,14 +232,14 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('Disconnected:', socket.id);
 
-    // â”€â”€ Client disconnected â”€â”€
+    // ── Client disconnected ──
     if (socket.clientId) {
       const agentSocketId = activeSessions.get(socket.clientId);
       if (agentSocketId && supports.has(agentSocketId)) {
-        // Preserve session â€” store it so it's restored when client reconnects
+        // Preserve session — store it so it's restored when client reconnects
         clientReconnectTimers.set(socket.clientId, { agentSocketId });
         io.to(agentSocketId).emit('client_reconnecting', { clientId: socket.clientId });
-        console.log(`Client ${socket.clientId} went offline â€” session with agent preserved`);
+        console.log(`Client ${socket.clientId} went offline — session with agent preserved`);
       } else if (activeSessions.has(socket.clientId)) {
         activeSessions.delete(socket.clientId);
       }
@@ -249,7 +249,7 @@ io.on('connection', (socket) => {
       broadcastClients();
     }
 
-    // â”€â”€ Support agent disconnected â”€â”€
+    // ── Support agent disconnected ──
     if (supports.has(socket.id)) {
       const sup = supports.get(socket.id);
       supports.delete(socket.id);
@@ -261,15 +261,15 @@ io.on('connection', (socket) => {
         const clientId  = sup.targetClientId;
         const agentName = sup.name;
 
-        // Notify client that agent dropped â€” session is preserved until agent reconnects
+        // Notify client that agent dropped — session is preserved until agent reconnects
         const clientData = clients.get(clientId);
         if (clientData) {
           io.to(clientData.socketId).emit('agent_reconnecting', { agentName });
         }
 
-        // Preserve session indefinitely â€” only ends on explicit disconnect
+        // Preserve session indefinitely — only ends on explicit disconnect
         reconnectTimers.set(agentName, { clientId });
-        console.log(`Support ${agentName} disconnected â€” session with ${clientId} preserved`);
+        console.log(`Support ${agentName} disconnected — session with ${clientId} preserved`);
         // activeSessions still holds clientId -> deadSocketId so client shows as busy
         broadcastClients();
 

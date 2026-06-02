@@ -337,7 +337,10 @@ aside.sidebar {
   min-height: 0;
 }
 
-video { width: 100%; height: 100%; object-fit: contain; display: block; cursor: none; }
+/* cursor:default — show the agent's instant local cursor over the video.
+   The client strips the captured cursor (getDisplayMedia cursor:'never'),
+   so this local cursor is the only one visible — no double-cursor, no lag. */
+video { width: 100%; height: 100%; object-fit: contain; display: block; cursor: default; }
 
 .video-placeholder {
   position: absolute;

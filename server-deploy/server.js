@@ -109,8 +109,10 @@ io.on('connection', (socket) => {
         if (agentSocketId && supports.has(agentSocketId)) {
           const sup = supports.get(agentSocketId);
           activeSessions.set(data.clientId, agentSocketId);
-          // Tell client to start new WebRTC with agent
-          io.to(socket.id).emit('support_request', { supportId: agentSocketId, agentName: sup.name });
+          // Tell client to start new WebRTC with agent (restored=true so the
+          // client UI can show a "you're already connected" banner instead
+          // of silently jumping to in-session state).
+          io.to(socket.id).emit('support_request', { supportId: agentSocketId, agentName: sup.name, restored: true });
           // Tell agent the client is back
           io.to(agentSocketId).emit('client_reconnected', { clientId: data.clientId });
           console.log(`Client ${data.clientId} reconnected — session with ${sup.name} restored`);

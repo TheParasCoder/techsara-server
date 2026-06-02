@@ -1,3 +1,4 @@
+# Rebuild marker: 2026-06-03 — force Render to redeploy from latest main
 services:
   - type: web
     name: techsara-signaling-server
